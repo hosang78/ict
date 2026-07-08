@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사업계획 타임라인 관리시스템</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#16232e; --sub:#5a6b78; --bg:#eef1f4; --panel:#ffffff;
+  --line:#d8e0e6; --accent:#0b6e7f; --accent-soft:#e2f0f2;
+  --st-plan:#8b95a1; --st-run:#1d6fd1; --st-delay:#d64545;
+  --st-done:#1e8e5a; --st-hold:#b08a2e;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard Variable',Pretendard,'Malgun Gothic',sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:13px;padding:7px 9px;
+  border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- 로그인 ---------- */
+#authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#0f2a38 0%,#0b6e7f 100%)}
+.auth-card{background:#fff;border-radius:14px;padding:36px 34px;width:380px;max-width:92vw;
+  box-shadow:0 18px 50px rgba(6,30,40,.35)}
+.auth-card h1{font-size:20px;font-weight:800;letter-spacing:-.3px}
+.auth-card .sub{color:var(--sub);font-size:13px;margin:6px 0 22px}
+.auth-card label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:12px 0 4px}
+.auth-card input{width:100%}
+.auth-card .btn-primary{width:100%;margin-top:20px}
+.auth-toggle{margin-top:14px;text-align:center;font-size:13px;color:var(--sub)}
+.auth-toggle a{color:var(--accent);font-weight:600;cursor:pointer;text-decoration:none}
+.auth-msg{margin-top:12px;font-size:13px;border-radius:6px;padding:9px 11px;display:none}
+.auth-msg.err{display:block;background:#fdecec;color:#b23030}
+.auth-msg.ok{display:block;background:#e8f6ee;color:#1e7a4d}
+
+/* ---------- 공통 버튼 ---------- */
+.btn-primary{background:var(--accent);color:#fff;border:none;border-radius:7px;
+  padding:9px 16px;font-size:14px;font-weight:700}
+.btn-primary:hover{background:#095a68}
+.btn-ghost{background:#fff;border:1px solid var(--line);border-radius:7px;
+  padding:8px 13px;font-size:13px;font-weight:600;color:var(--ink)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:4px 9px;font-size:12px;border-radius:6px;border:1px solid var(--line);
+  background:#fff;font-weight:600}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.danger:hover{border-color:var(--st-delay);color:var(--st-delay)}
+
+/* ---------- 레이아웃 ---------- */
+#app{display:none}
+header.topbar{background:#0f2a38;color:#fff;padding:0 22px;height:56px;
+  display:flex;align-items:center;gap:18px;position:sticky;top:0;z-index:50}
+.topbar .logo{font-weight:800;font-size:16px;letter-spacing:-.3px}
+.topbar .logo span{color:#6fd0dd}
+.topbar .spacer{flex:1}
+.topbar .user{font-size:13px;color:#c6d4dc}
+.topbar .user b{color:#fff}
+.topbar select{background:#193a4b;color:#fff;border:1px solid #2c5163}
+.topbar .btn-ghost{background:transparent;color:#c6d4dc;border-color:#2c5163}
+.topbar .btn-ghost:hover{color:#fff;border-color:#6fd0dd}
+
+nav.tabs{background:#fff;border-bottom:1px solid var(--line);padding:0 22px;
+  display:flex;gap:4px;position:sticky;top:56px;z-index:49}
+nav.tabs button{background:none;border:none;padding:13px 16px;font-size:14px;
+  font-weight:600;color:var(--sub);border-bottom:2.5px solid transparent}
+nav.tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+nav.tabs button:hover{color:var(--accent)}
+
+main{max-width:1500px;margin:0 auto;padding:18px 22px 60px}
+
+/* ---------- 필터 바 ---------- */
+.filterbar{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.filterbar .grow{flex:1;min-width:160px}
+.filterbar input[type=search]{width:100%}
+
+/* ---------- 패널/테이블 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.panel-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;
+  align-items:center;gap:10px;font-weight:700}
+.panel-head .spacer{flex:1}
+table.grid{width:100%;border-collapse:collapse;font-size:13px}
+table.grid th{background:#f6f8fa;color:var(--sub);font-weight:600;font-size:12px;
+  padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:center}
+table.grid td{padding:8px 10px;border-bottom:1px solid #eef1f4;text-align:center;vertical-align:middle}
+table.grid td.left{text-align:left}
+table.grid tr:hover td{background:#f8fbfc}
+.scroll-x{overflow-x:auto}
+
+/* ---------- 상태 배지 ---------- */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:700;color:#fff}
+.badge.예정{background:var(--st-plan)}
+.badge.추진중{background:var(--st-run)}
+.badge.지연{background:var(--st-delay)}
+.badge.완료{background:var(--st-done)}
+.badge.보류{background:var(--st-hold)}
+.delay-hint{color:var(--st-delay);font-weight:700;font-size:12px}
+
+/* ---------- 타임라인 ---------- */
+.tl-wrap{overflow-x:auto}
+.tl{min-width:1050px}
+.tl-header,.tl-row{display:grid;grid-template-columns:300px repeat(var(--cols,12),1fr);align-items:stretch}
+.tl-header{background:#f6f8fa;border-bottom:1px solid var(--line);
+  font-size:12px;color:var(--sub);font-weight:600}
+.tl-header>div{padding:8px 6px;text-align:center;border-left:1px solid #edf1f4}
+.tl-header>div:first-child{text-align:left;padding-left:14px;border-left:none}
+.tl-group{background:#eef4f6;font-weight:700;font-size:13px;padding:7px 14px;
+  border-bottom:1px solid var(--line);color:#134b56}
+.tl-row{border-bottom:1px solid #eef1f4;position:relative;min-height:52px}
+.tl-row:hover{background:#f8fbfc}
+.tl-info{padding:8px 12px 8px 14px;border-right:1px solid #edf1f4}
+.tl-info .nm{font-weight:700;font-size:13px;cursor:pointer}
+.tl-info .nm:hover{color:var(--accent);text-decoration:underline}
+.tl-info .mt{font-size:11.5px;color:var(--sub);margin-top:2px}
+.tl-cell{border-left:1px solid #edf1f4;position:relative}
+.tl-cell.now{background:rgba(11,110,127,.06)}
+.tl-bararea{position:absolute;left:300px;right:0;top:0;bottom:0;
+  display:grid;grid-template-columns:repeat(var(--cols,12),1fr);align-items:center;pointer-events:none}
+.tl-bar{grid-row:1;height:22px;border-radius:5px;background:#dbe6ea;position:relative;
+  overflow:hidden;pointer-events:auto;cursor:pointer;min-width:8px}
+.tl-bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px 0 0 5px}
+.tl-bar .lbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#123;white-space:nowrap}
+.tl-bar.cont-l{border-top-left-radius:0;border-bottom-left-radius:0}
+.tl-bar.cont-r{border-top-right-radius:0;border-bottom-right-radius:0}
+.tl-bar .arrow{position:absolute;top:0;bottom:0;width:10px;display:flex;align-items:center;
+  font-size:10px;color:var(--sub)}
+.legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--sub);flex-wrap:wrap}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+
+/* ---------- 진도 미니 표시 ---------- */
+.mini{font-size:11px;color:var(--sub)}
+.pct{font-weight:700}
+
+/* ---------- 모달 ---------- */
+.modal-back{position:fixed;inset:0;background:rgba(10,25,33,.5);z-index:100000;
+  display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow-y:auto}
+.modal-back.show{display:flex}
+.modal{background:#fff;border-radius:14px;width:860px;max-width:100%;
+  box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.modal.narrow{width:640px}
+.modal-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal-h h2{font-size:16px;font-weight:800}
+.modal-h .x{margin-left:auto;background:none;border:none;font-size:20px;color:var(--sub)}
+.modal-b{padding:18px 20px;max-height:70vh;overflow-y:auto}
+.modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px}
+.form-grid .full{grid-column:1/-1}
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.fld input,.fld select,.fld textarea{width:100%}
+.fld .req{color:var(--st-delay)}
+table.mgrid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+table.mgrid th{background:#f6f8fa;padding:6px;border:1px solid var(--line);font-size:12px;color:var(--sub)}
+table.mgrid td{border:1px solid var(--line);padding:3px;text-align:center}
+table.mgrid input{width:64px;padding:4px 6px;text-align:right;border-radius:4px}
+.hist-item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.hist-item .top{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--sub)}
+.hist-item .top b{color:var(--ink)}
+.hist-chg{margin-top:6px;font-size:12.5px}
+.hist-chg .row{padding:2px 0}
+.hist-chg .k{font-weight:700;color:#134b56}
+.hist-chg .old{color:#a33;text-decoration:line-through;margin:0 4px}
+.hist-chg .new{color:#186}
+
+/* ---------- 관리 탭 ---------- */
+.admin-cols{display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start}
+.org-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #eef1f4}
+.org-item.div{padding-left:34px;color:var(--sub)}
+.org-item .nm{flex:1;font-weight:600}
+.org-item.inactive .nm{color:#aab;text-decoration:line-through}
+.tag{font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--accent-soft);color:var(--accent)}
+.tag.pending{background:#fdecec;color:#b23030}
+.empty{padding:36px;text-align:center;color:var(--sub)}
+.notice{background:#fff8e6;border:1px solid #eedca8;color:#7a5c12;border-radius:8px;
+  padding:10px 14px;font-size:13px;margin-bottom:14px}
+
+@media (max-width:1024px){
+  main{padding:14px 12px 50px}
+  .admin-cols{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== 로그인 화면 ===================== -->
+<div id="authScreen">
+  <div class="auth-card">
+    <h1>사업계획 타임라인 관리시스템</h1>
+    <div class="sub">연도별 사업계획 · 진도율 · 추진현황 통합 관리</div>
+    <div id="cfgWarn" class="auth-msg err" style="display:none">
+      index.html 상단의 SUPABASE_URL / SUPABASE_ANON_KEY 를 설정해 주세요.
+    </div>
+    <div id="signupFields" style="display:none">
+      <label>이름</label>
+      <input id="suName" placeholder="홍길동" autocomplete="name">
+    </div>
+    <label>이메일</label>
+    <input id="authEmail" type="email" placeholder="user@example.com" autocomplete="username">
+    <label>비밀번호</label>
+    <input id="authPw" type="password" placeholder="8자 이상" autocomplete="current-password">
+    <button class="btn-primary" id="authBtn">로그인</button>
+    <div class="auth-msg" id="authMsg"></div>
+    <div class="auth-toggle" id="authToggle">
+      계정이 없으신가요? <a id="toggleLink">회원가입</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 메인 앱 ===================== -->
+<div id="app">
+  <header class="topbar">
+    <div class="logo">사업계획 <span>타임라인</span></div>
+    <select id="yearSel" title="사업연도"></select>
+    <button class="btn-ghost" id="yearLockBtn" style="display:none"></button>
+    <span class="mini" id="yearLockBadge" style="display:none;color:#ffd479">🔒 이 연도는 잠금 상태</span>
+    <div class="spacer"></div>
+    <div class="user" id="userInfo"></div>
+    <button class="btn-ghost" id="logoutBtn">로그아웃</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="timeline" class="active">타임라인</button>
+    <button data-tab="list">사업계획 목록</button>
+    <button data-tab="history">변경이력</button>
+    <button data-tab="admin" id="adminTabBtn" style="display:none">조직·사용자 관리</button>
+  </nav>
+
+  <main>
+    <div id="pendingNotice" class="notice" style="display:none">
+      계정이 승인 대기 중입니다. 시스템관리자에게 승인을 요청해 주세요.
+    </div>
+
+    <!-- 공통 필터 -->
+    <div class="filterbar" id="filterbar">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:10.5px;color:var(--sub);font-weight:700">기준년월</span>
+        <input type="month" id="refMonthSel" style="padding:6px 8px" title="진도율·추진상태 계산 기준 월">
+      </div>
+      <select id="fOrg"></select>
+      <select id="fStatus">
+        <option value="">상태 전체</option>
+        <option>예정</option><option>추진중</option><option>지연</option>
+        <option>완료</option><option>보류</option>
+      </select>
+      <select id="fCategory">
+        <option value="">구분 전체</option><option>외주</option><option>자체</option>
+      </select>
+      <select id="fManager"><option value="">담당자 전체</option></select>
+      <div class="grow"><input type="search" id="fText" placeholder="사업명 검색"></div>
+      <button class="btn-ghost" id="resetFilter">초기화</button>
+      <button class="btn-ghost" id="excelBtn">엑셀 다운로드</button>
+      <button class="btn-primary" id="newPlanBtn">+ 사업계획 등록</button>
+    </div>
+
+    <!-- 타임라인 -->
+    <section id="tab-timeline">
+      <div class="panel">
+        <div class="panel-head">
+          <span id="tlTitle"></span>
+          <div class="spacer"></div>
+          <div class="legend">
+            <span><i style="background:#dbe6ea"></i>계획기간</span>
+            <span><i style="background:var(--st-run)"></i>추진중</span>
+            <span><i style="background:var(--st-delay)"></i>지연</span>
+            <span><i style="background:var(--st-done)"></i>완료</span>
+            <span><i style="background:var(--st-hold)"></i>보류</span>
+            <span><i style="background:var(--st-plan)"></i>예정</span>
+          </div>
+          <select id="tlZoom">
+            <option value="month">월 단위</option>
+            <option value="quarter">분기 단위</option>
+          </select>
+        </div>
+        <div class="tl-wrap"><div class="tl" id="tlBody"></div></div>
+      </div>
+    </section>
+
+    <!-- 목록 -->
+    <section id="tab-list" style="display:none">
+      <div class="panel">
+        <div class="panel-head"><span id="listTitle"></span></div>
+        <div class="scroll-x">
+          <table class="grid" id="listTable">
+            <thead>
+              <tr>
+                <th rowspan="2">사업명</th><th rowspan="2">담당팀/과</th>
+                <th rowspan="2">담당자</th><th rowspan="2">구분</th>
+                <th rowspan="2">추진기간</th>
+                <th colspan="2">1분기</th><th colspan="2">2분기</th>
+                <th colspan="2">3분기</th><th colspan="2">4분기</th>
+                <th rowspan="2">연간<br>진도율</th><th rowspan="2">상태</th>
+                <th rowspan="2">비고</th><th rowspan="2">관리</th>
+              </tr>
+              <tr>
+                <th>계획</th><th>실적</th><th>계획</th><th>실적</th>
+                <th>계획</th><th>실적</th><th>계획</th><th>실적</th>
+              </tr>
+            </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 변경이력 -->
+    <section id="tab-history" style="display:none">
+      <div class="panel">
+        <div class="panel-head">
+          변경이력 <span class="mini">(등록·수정·삭제 자동 기록)</span>
+          <div class="spacer"></div>
+          <input type="search" id="histSearch" placeholder="사업명·작업자 검색" style="width:220px">
+        </div>
+        <div id="histBody" style="padding:14px 16px"></div>
+      </div>
+    </section>
+
+    <!-- 조직·사용자 관리 -->
+    <section id="tab-admin" style="display:none">
+      <div class="admin-cols">
+        <div class="panel">
+          <div class="panel-head">조직 체계
+            <div class="spacer"></div>
+            <button class="btn-sm" id="addTeamBtn">+ 팀</button>
+          </div>
+          <div id="orgList"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">사용자 관리
+            <span class="mini">(비활성화 시 즉시 접근 차단·권한 회수)</span>
+            <span class="mini" id="hiddenUserCount"></span>
+            <div class="spacer"></div>
+            <label class="mini" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600">
+              <input type="checkbox" id="showHiddenChk" style="width:auto">숨긴 사용자 포함 보기
+            </label>
+          </div>
+          <div class="scroll-x">
+            <table class="grid">
+              <thead><tr>
+                <th>이름</th><th>이메일</th><th>소속</th><th>권한</th>
+                <th>상태</th><th>가입일</th><th>관리</th>
+              </tr></thead>
+              <tbody id="userBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===================== 사업계획 등록/수정 모달 ===================== -->
+<div class="modal-back" id="planModal">
+  <div class="modal">
+    <div class="modal-h"><h2 id="pmTitle">사업계획 등록</h2>
+      <button class="x" data-close="planModal">✕</button></div>
+    <div class="modal-b">
+      <div class="notice" id="pmLockNotice" style="display:none">
+        🔒 이 사업연도는 잠금 상태입니다. 실적·비고·순서만 수정할 수 있습니다.
+      </div>
+      <div class="form-grid">
+        <div class="fld full"><label>사업명 <span class="req">*</span></label>
+          <input id="pmName" maxlength="200"></div>
+        <div class="fld"><label>담당 팀/과 <span class="req">*</span></label>
+          <select id="pmOrg"></select></div>
+        <div class="fld"><label>담당자</label>
+          <select id="pmManager"><option value="">선택</option></select></div>
+        <div class="fld"><label>구분 <span class="req">*</span></label>
+          <select id="pmCategory"><option>자체</option><option>외주</option></select></div>
+        <div class="fld"><label>추진상태</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer;padding:7px 0">
+            <input type="checkbox" id="pmHold" style="width:auto">
+            보류로 지정 (수동)
+          </label>
+          <div class="mini" id="pmAutoPreview" style="margin-top:2px"></div>
+          <div class="mini" style="color:var(--sub)">그 외 예정·추진중·지연·완료는 진도율로 자동 계산됩니다.</div></div>
+        <div class="fld"><label>시작월 <span class="req">*</span></label>
+          <input type="month" id="pmStart"></div>
+        <div class="fld"><label>종료월 <span class="req">*</span>
+          <span class="mini">(연도를 넘어가는 사업 가능)</span></label>
+          <input type="month" id="pmEnd"></div>
+        <div class="fld full"><label>비고 (지연사유 등)</label>
+          <textarea id="pmRemark" rows="2" maxlength="1000"></textarea></div>
+        <div class="fld full">
+          <label>월별 계획·진도율 (누적 %, 0~100)</label>
+          <div class="scroll-x"><table class="mgrid" id="pmMonthly"></table></div>
+        </div>
+      </div>
+      <div class="auth-msg err" id="pmErr" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn-ghost" data-close="planModal">취소</button>
+      <button class="btn-primary" id="pmSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 개별 사업 이력 모달 ===================== -->
+<div class="modal-back" id="histModal">
+  <div class="modal narrow">
+    <div class="modal-h"><h2 id="hmTitle">변경이력</h2>
+      <button class="x" data-close="histModal">✕</button></div>
+    <div class="modal-b" id="hmBody"></div>
+    <div class="modal-f"><button class="btn-ghost" data-close="histModal">닫기</button></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   설정: Supabase 프로젝트 정보 입력 (Dashboard > Settings > API)
+   anon key 는 공개 가능한 키이며, 데이터 보호는 RLS 정책이 수행합니다.
+============================================================ */
+const SUPABASE_URL = "https://flcucalltuwbzqnddiat.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsY3VjYWxsdHV3YnpxbmRkaWF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjY3NTcsImV4cCI6MjA5OTAwMjc1N30.Ysctik5EpZeXmYVDsn-CS7F0jMPT8vNqHZ_sGuQGoh4";
+
+/* ============================================================ */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const ROLE_LABEL = { admin:"시스템관리자", team_leader:"팀장", division_head:"과장", staff:"직원" };
+const FIELD_LABEL = {
+  name:"사업명", fiscal_year:"사업연도", org_id:"담당팀/과", manager_id:"담당자",
+  category:"구분", start_month:"시작월", end_month:"종료월", monthly:"월별 계획/진도율",
+  status:"추진상태", remark:"비고", deleted:"삭제여부", id:"ID"
+};
+const ST_COLOR = { 예정:"#8b95a1", 추진중:"#1d6fd1", 지연:"#d64545", 완료:"#1e8e5a", 보류:"#b08a2e" };
+
+let sb = null;
+const S = {           // 앱 상태
+  session:null, me:null, orgs:[], users:[], plans:[], history:[],
+  year:new Date().getFullYear(), tab:"timeline", zoom:"month",
+  refMonth:new Date().toISOString().slice(0,7),   // 기준년월(YYYY-MM): 진도율·추진상태 계산 기준
+  filters:{ org:"", status:"", category:"", manager:"", text:"" },
+  editingId:null,
+  yearLocks:[],           // [{fiscal_year, locked, ...}, ...] 전체 연도 잠금 현황
+  showHiddenUsers:false   // 사용자 관리에서 숨김 처리된 사용자도 표시할지
+};
+function isYearLocked(fy){ const r=S.yearLocks.find(x=>x.fiscal_year===fy); return !!r?.locked; }
+
+/* ---------------- 유틸: 월 계산 ---------------- */
+const ym = (d) => d.slice(0,7);                       // '2026-01-01' -> '2026-01'
+const ymAdd = (s,n) => { const [y,m]=s.split("-").map(Number);
+  const t=(y*12+m-1)+n; return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,"0")}`; };
+const ymDiff = (a,b) => { const [y1,m1]=a.split("-").map(Number),[y2,m2]=b.split("-").map(Number);
+  return (y2*12+m2)-(y1*12+m1); };
+const ymList = (s,e) => { const out=[]; let c=s;
+  while (ymDiff(c,e) >= 0) { out.push(c); c=ymAdd(c,1); } return out; };
+const fmtPct = (v) => (v===null||v===undefined||v==="") ? "-" : Number(v)+"%";
+const fmtDT = (t) => new Date(t).toLocaleString("ko-KR",
+  { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+/* 분기/연간 값: 기준년월까지의 데이터만 반영한 마지막 입력월 누적값 */
+function periodValue(plan, months, key, cutoff) {
+  let v = null;
+  for (const m of months) {
+    if (cutoff && m > cutoff) break;
+    const rec = plan.monthly?.[m];
+    if (rec && rec[key] !== null && rec[key] !== undefined && rec[key] !== "") v = Number(rec[key]);
+  }
+  return v;
+}
+const qMonths = (y,q) => [1,2,3].map(i => `${y}-${String((q-1)*3+i).padStart(2,"0")}`);
+const yMonths = (y) => Array.from({length:12}, (_,i)=>`${y}-${String(i+1).padStart(2,"0")}`);
+const quarterVal = (p,y,q,k) => periodValue(p, qMonths(y,q), k, S.refMonth);
+const annualVal  = (p,y,k)   => periodValue(p, yMonths(y), k, S.refMonth);
+
+/* ---------------- 추진상태 자동 계산 ----------------
+   보류는 사람이 직접 지정하는 유일한 예외이며, 나머지 4단계
+   (예정/추진중/지연/완료)는 기준년월 시점의 계획·실적 진도율로 자동 산출한다. */
+function computeAutoStatus(sYm, eYm, monthly, refMonth){
+  const av = periodValue({monthly}, ymList(sYm,eYm), "a", refMonth);
+  if (av !== null && av >= 100) return "완료";
+  if (refMonth < sYm) return "예정";
+  if (refMonth > eYm) return "지연";
+  const pv = periodValue({monthly}, ymList(sYm,eYm), "p", refMonth);
+  if (av !== null && pv !== null && av < pv) return "지연";
+  return "추진중";
+}
+function displayStatus(plan){
+  if (plan.status === "보류") return "보류";
+  return computeAutoStatus(ym(plan.start_month), ym(plan.end_month), plan.monthly||{}, S.refMonth);
+}
+
+function orgName(id){ const o=S.orgs.find(x=>x.id===id); if(!o) return "-";
+  if (o.type==="division"){ const t=S.orgs.find(x=>x.id===o.parent_id);
+    return t ? `${t.name} · ${o.name}` : o.name; } return o.name; }
+function userName(id){ const u=S.users.find(x=>x.id===id); return u? u.name : "-"; }
+
+/* 권한: 이 조직의 사업을 관리할 수 있는가 (RLS와 동일 규칙, UI 노출용) */
+function canManage(orgId){
+  const me=S.me; if(!me||!me.active) return false;
+  if(me.role==="admin") return true;
+  if(orgId===me.org_id) return true;
+  if(me.role==="team_leader"){
+    const o=S.orgs.find(x=>x.id===orgId);
+    return !!o && o.parent_id===me.org_id;
+  }
+  return false;
+}
+
+/* ============================================================
+   인증
+============================================================ */
+let signupMode=false;
+function initAuthUI(){
+  if (SUPABASE_URL.includes("YOUR-PROJECT")) { $("cfgWarn").style.display="block"; return; }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb.auth.onAuthStateChange((_e, session)=>{
+    S.session=session;
+    if(session) enterApp(); else showAuth();
+  });
+}
+function showAuth(){ $("app").style.display="none"; $("authScreen").style.display="flex"; }
+function authMsg(t,ok){ const m=$("authMsg"); m.textContent=t;
+  m.className="auth-msg "+(ok?"ok":"err"); }
+
+$("toggleLink").onclick=()=>{
+  signupMode=!signupMode;
+  $("signupFields").style.display=signupMode?"block":"none";
+  $("authBtn").textContent=signupMode?"회원가입":"로그인";
+  $("authToggle").firstChild.textContent=signupMode?"이미 계정이 있으신가요? ":"계정이 없으신가요? ";
+  $("toggleLink").textContent=signupMode?"로그인":"회원가입";
+  $("authMsg").className="auth-msg";
+};
+$("authBtn").onclick=async()=>{
+  if(!sb) return;
+  const email=$("authEmail").value.trim(), pw=$("authPw").value;
+  if(!email||!pw) return authMsg("이메일과 비밀번호를 입력해 주세요.");
+  try{
+    if(signupMode){
+      const name=$("suName").value.trim();
+      if(!name) return authMsg("이름을 입력해 주세요.");
+      if(pw.length<8) return authMsg("비밀번호는 8자 이상이어야 합니다.");
+      const {error}=await sb.auth.signUp({email, password:pw, options:{data:{name}}});
+      if(error) throw error;
+      authMsg("가입 완료. 관리자 승인 후 사용할 수 있습니다.", true);
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email, password:pw});
+      if(error) throw error;
+    }
+  }catch(e){ authMsg(e.message==="Invalid login credentials"
+      ? "이메일 또는 비밀번호가 올바르지 않습니다." : "오류: "+e.message); }
+};
+$("authPw").addEventListener("keydown", e=>{ if(e.key==="Enter") $("authBtn").click(); });
+$("logoutBtn").onclick=()=>sb.auth.signOut();
+
+/* ============================================================
+   앱 진입 / 데이터 로딩
+============================================================ */
+async function enterApp(){
+  $("authScreen").style.display="none"; $("app").style.display="block";
+  const uid=S.session.user.id;
+  const {data:me,error}=await sb.from("profiles").select("*").eq("id",uid).maybeSingle();
+  if(error||!me){ alert("프로필을 불러올 수 없습니다."); return sb.auth.signOut(); }
+  S.me=me;
+  $("userInfo").innerHTML=`<b>${esc(me.name)}</b> · ${ROLE_LABEL[me.role]||me.role}`;
+  $("pendingNotice").style.display = me.active ? "none" : "block";
+  $("adminTabBtn").style.display = me.role==="admin" ? "" : "none";
+  buildYearSelect();
+  if(me.active){ await loadRefData(); await loadYearLocks(); await loadPlans(); }
+  updateActionVisibility();
+  renderYearLockUI();
+  renderAll();
+}
+function updateActionVisibility(){
+  const canAdd = S.me?.active && (S.me.role==="admin" || !isYearLocked(S.year));
+  $("newPlanBtn").style.display = canAdd ? "" : "none";
+}
+async function loadYearLocks(){
+  const {data,error}=await sb.from("year_locks").select("*");
+  if(!error) S.yearLocks=data||[];
+}
+function renderYearLockUI(){
+  const isAdmin=S.me?.role==="admin";
+  const btn=$("yearLockBtn"), badge=$("yearLockBadge");
+  const locked=isYearLocked(S.year);
+  if(isAdmin){
+    btn.style.display="";
+    btn.textContent = locked ? `🔒 ${S.year}년 잠금 해제` : `🔓 ${S.year}년 잠금 설정`;
+    badge.style.display="none";
+  }else{
+    btn.style.display="none";
+    badge.style.display = locked ? "" : "none";
+  }
+}
+$("yearLockBtn").onclick=async()=>{
+  const newLocked=!isYearLocked(S.year);
+  if(!confirm(newLocked
+    ? `${S.year}년 사업계획을 잠그시겠습니까?\n관리자 외에는 사업명·담당팀/과·담당자·구분·기간·계획값을 수정할 수 없게 됩니다.\n(실적·비고 입력과 순서 변경은 계속 가능합니다)`
+    : `${S.year}년 잠금을 해제하시겠습니까?`)) return;
+  const {error}=await sb.from("year_locks").upsert(
+    { fiscal_year:S.year, locked:newLocked, locked_by:S.me.id, locked_at:new Date().toISOString() },
+    { onConflict:"fiscal_year" });
+  if(error) return alert("변경 실패: "+error.message);
+  await loadYearLocks(); renderYearLockUI(); updateActionVisibility(); renderData();
+};
+function buildYearSelect(){
+  const cur=new Date().getFullYear(); const sel=$("yearSel"); sel.innerHTML="";
+  for(let y=cur-3; y<=cur+3; y++){
+    const o=document.createElement("option");
+    o.value=y; o.textContent=y+"년"; if(y===S.year) o.selected=true;
+    sel.appendChild(o);
+  }
+}
+async function loadRefData(){
+  const [{data:orgs},{data:users}] = await Promise.all([
+    sb.from("organizations").select("*").order("sort_order").order("name"),
+    sb.from("profiles").select("id,name,email,role,org_id,active,hidden,created_at").order("name")
+  ]);
+  S.orgs=orgs||[]; S.users=users||[];
+}
+async function loadPlans(){
+  const y=S.year;
+  const {data,error}=await sb.from("plans").select("*")
+    .lte("start_month", `${y}-12-31`).gte("end_month", `${y}-01-01`)
+    .order("start_month");
+  if(error){ console.error(error); alert("사업계획 조회 실패: "+error.message); return; }
+  S.plans=data||[];
+}
+async function loadHistory(){
+  const {data,error}=await sb.from("plan_history").select("*")
+    .order("changed_at",{ascending:false}).limit(300);
+  if(!error) S.history=data||[];
+}
+
+/* ============================================================
+   필터
+============================================================ */
+function filteredPlans(){
+  const f=S.filters;
+  return S.plans.filter(p=>{
+    if(f.org && p.org_id!==f.org){
+      const o=S.orgs.find(x=>x.id===p.org_id);          // 팀 선택 시 하위 과 포함
+      if(!o || o.parent_id!==f.org) return false;
+    }
+    if(f.status && displayStatus(p)!==f.status) return false;
+    if(f.category && p.category!==f.category) return false;
+    if(f.manager && p.manager_id!==f.manager) return false;
+    if(f.text && !p.name.toLowerCase().includes(f.text.toLowerCase())) return false;
+    return true;
+  });
+}
+function buildFilterOptions(){
+  const orgSel=$("fOrg");
+  let html='<option value="">팀/과 전체</option>';
+  S.orgs.filter(o=>o.type==="team"&&o.active).forEach(t=>{
+    html+=`<option value="${t.id}">${esc(t.name)}</option>`;
+    S.orgs.filter(d=>d.parent_id===t.id&&d.active).forEach(d=>{
+      html+=`<option value="${d.id}">&nbsp;&nbsp;└ ${esc(d.name)}</option>`;
+    });
+  });
+  orgSel.innerHTML=html; orgSel.value=S.filters.org;
+  const mSel=$("fManager");
+  mSel.innerHTML='<option value="">담당자 전체</option>'+
+    S.users.filter(u=>u.active && !u.hidden).map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join("");
+  mSel.value=S.filters.manager;
+}
+["fOrg","fStatus","fCategory","fManager"].forEach(id=>{
+  $(id).addEventListener("change",()=>{
+    S.filters={ ...S.filters,
+      org:$("fOrg").value, status:$("fStatus").value,
+      category:$("fCategory").value, manager:$("fManager").value };
+    renderData();
+  });
+});
+$("refMonthSel").value = S.refMonth;
+$("refMonthSel").addEventListener("change",()=>{
+  if($("refMonthSel").value){ S.refMonth=$("refMonthSel").value; renderData(); }
+});
+$("fText").addEventListener("input",()=>{ S.filters.text=$("fText").value; renderData(); });
+$("resetFilter").onclick=()=>{
+  S.filters={org:"",status:"",category:"",manager:"",text:""};
+  $("fText").value=""; buildFilterOptions();
+  $("fStatus").value=""; $("fCategory").value=""; renderData();
+};
+$("yearSel").addEventListener("change",async()=>{
+  S.year=Number($("yearSel").value); await loadPlans();
+  renderYearLockUI(); updateActionVisibility(); renderData();
+});
+
+/* ============================================================
+   탭
+============================================================ */
+$("tabs").addEventListener("click", async(e)=>{
+  const b=e.target.closest("button"); if(!b) return;
+  S.tab=b.dataset.tab;
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
+  ["timeline","list","history","admin"].forEach(t=>{
+    $("tab-"+t).style.display = t===S.tab ? "" : "none";
+  });
+  $("filterbar").style.display = (S.tab==="timeline"||S.tab==="list") ? "flex" : "none";
+  if(S.tab==="history"){ await loadHistory(); renderHistory(); }
+  if(S.tab==="admin") renderAdmin();
+});
+
+function renderAll(){ buildFilterOptions(); renderData(); }
+function renderData(){ renderTimeline(); renderList(); }
+
+/* ---------------- 사업계획 표시순서: 팀순서 → 과순서 → 사업순서 ---------------- */
+function planDisplayKey(p){
+  const o=S.orgs.find(x=>x.id===p.org_id);
+  const teamId = o ? (o.type==="team"? o.id : o.parent_id) : null;
+  const team=S.orgs.find(x=>x.id===teamId);
+  const teamOrder = team ? team.sort_order : Infinity;
+  const teamName  = team ? team.name : "\uffff";           // 미지정은 맨 뒤
+  const divOrder  = (o && o.type==="division") ? (o.sort_order??0) : -1; // 팀 직속 사업 먼저
+  return [teamOrder, teamName, divOrder, p.sort_order??0, p.name];
+}
+function sortPlansForDisplay(plans){
+  return [...plans].sort((a,b)=>{
+    const ka=planDisplayKey(a), kb=planDisplayKey(b);
+    for(let i=0;i<ka.length;i++){
+      if(ka[i]<kb[i]) return -1;
+      if(ka[i]>kb[i]) return 1;
+    }
+    return 0;
+  });
+}
+
+/* ============================================================
+   타임라인 렌더링
+============================================================ */
+$("tlZoom").addEventListener("change",()=>{ S.zoom=$("tlZoom").value; renderTimeline(); });
+
+function renderTimeline(){
+  const y=S.year, plans=sortPlansForDisplay(filteredPlans());
+  $("tlTitle").textContent=`${y}년 사업 추진 타임라인 (${plans.length}건) · 기준월 ${S.refMonth.replace("-",".")}`;
+  const cols = S.zoom==="month" ? 12 : 4;
+  const tl=$("tlBody"); tl.style.setProperty("--cols",cols);
+  const nowYm = ym(new Date().toISOString());
+  const nowCol = (nowYm.startsWith(String(y)))
+    ? (S.zoom==="month" ? Number(nowYm.slice(5)) : Math.ceil(Number(nowYm.slice(5))/3)) : -1;
+
+  let html=`<div class="tl-header" style="--cols:${cols}"><div>사업명 / 담당</div>`;
+  for(let i=1;i<=cols;i++) html+=`<div>${S.zoom==="month"? i+"월" : i+"분기"}</div>`;
+  html+="</div>";
+
+  if(!plans.length){ tl.innerHTML=html+'<div class="empty">조건에 맞는 사업계획이 없습니다.</div>'; return; }
+
+  // 팀 순서(organizations.sort_order)를 그대로 따라가며 그룹 헤더 삽입
+  let lastTeam=undefined;
+  for(const p of plans){
+    const o=S.orgs.find(x=>x.id===p.org_id);
+    const teamId = o ? (o.type==="team"? o.id : o.parent_id) : null;
+    if(teamId!==lastTeam){
+      const t=S.orgs.find(x=>x.id===teamId);
+      html+=`<div class="tl-group">${esc(t? t.name : "기타")}</div>`;
+      lastTeam=teamId;
+    }
+    html+=timelineRow(p, y, cols, nowCol);
+  }
+  tl.innerHTML=html;
+}
+
+function timelineRow(p, y, cols, nowCol){
+  const s=ym(p.start_month), e=ym(p.end_month);
+  const yS=`${y}-01`, yE=`${y}-12`;
+  const contL = ymDiff(s,yS)>0, contR = ymDiff(yE,e)>0;   // 연도를 넘는 사업 표시
+  let m1 = contL ? 1  : Number(s.slice(5));
+  let m2 = contR ? 12 : Number(e.slice(5));
+  let c1,c2;
+  if(S.zoom==="month"){ c1=m1; c2=m2; } else { c1=Math.ceil(m1/3); c2=Math.ceil(m2/3); }
+
+  const aAnn=annualVal(p,y,"a"), pAnn=annualVal(p,y,"p");
+  const st=displayStatus(p);
+  const color=ST_COLOR[st]||"#8b95a1";
+  const fillW = aAnn===null? 0 : Math.max(0,Math.min(100,aAnn));
+
+  let cells="";
+  for(let i=1;i<=cols;i++)
+    cells+=`<div class="tl-cell${i===nowCol?" now":""}"></div>`;
+
+  const periodTxt=`${s.replace("-",".")} ~ ${e.replace("-",".")}`;
+  const tip=`${p.name}\n기간 ${periodTxt}\n${y}년 계획 ${fmtPct(pAnn)} / 실적 ${fmtPct(aAnn)}\n상태 ${st}${p.remark? "\n비고 "+p.remark:""}`;
+
+  return `<div class="tl-row" style="--cols:${cols}">
+    <div class="tl-info">
+      <div class="nm" onclick="openPlanModal('${p.id}')">${esc(p.name)}</div>
+      <div class="mt">${esc(orgName(p.org_id))} · ${esc(userName(p.manager_id))} ·
+        <span class="badge ${st}" style="font-size:10.5px;padding:1px 7px">${st}</span>
+      </div>
+      ${p.remark ? `<div class="mt" style="color:var(--sub);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.remark)}">📝 ${esc(p.remark)}</div>` : ""}
+    </div>
+    ${cells}
+    <div class="tl-bararea" style="--cols:${cols}">
+      <div class="tl-bar ${contL?"cont-l":""} ${contR?"cont-r":""}"
+           style="grid-column:${c1}/${c2+1}" title="${esc(tip)}"
+           onclick="openPlanModal('${p.id}')">
+        <div class="fill" style="width:${fillW}%;background:${color}"></div>
+        ${contL?'<span class="arrow" style="left:2px">◀</span>':""}
+        <span class="lbl" style="color:${fillW>55?"#fff":"#123"}">${fmtPct(aAnn)}</span>
+        ${contR?'<span class="arrow" style="right:2px">▶</span>':""}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   목록 렌더링
+============================================================ */
+function renderList(){
+  const y=S.year, plans=sortPlansForDisplay(filteredPlans());
+  $("listTitle").textContent=`${y}년 사업계획 목록 (${plans.length}건) · 기준월 ${S.refMonth.replace("-",".")}`;
+  const tb=$("listBody");
+  if(!plans.length){ tb.innerHTML='<tr><td colspan="17" class="empty">조건에 맞는 사업계획이 없습니다.</td></tr>'; return; }
+  tb.innerHTML=plans.map(p=>{
+    const cells=[1,2,3,4].map(q=>{
+      const pv=quarterVal(p,y,q,"p"), av=quarterVal(p,y,q,"a");
+      const warn=(pv!==null&&av!==null&&av<pv)?' style="color:var(--st-delay);font-weight:700"':"";
+      return `<td class="num">${fmtPct(pv)}</td><td class="num"${warn}>${fmtPct(av)}</td>`;
+    }).join("");
+    const ann=annualVal(p,y,"a");
+    const st=displayStatus(p);
+    const canOrder=canManage(p.org_id);
+    const locked = S.me.role!=="admin" && isYearLocked(p.fiscal_year);
+    const manage = canOrder
+      ? `<button class="btn-sm" onclick="movePlan('${p.id}',-1)" title="위로">▲</button>
+         <button class="btn-sm" onclick="movePlan('${p.id}',1)" title="아래로">▼</button>
+         <button class="btn-sm" onclick="openPlanModal('${p.id}')">수정</button>
+         ${locked?"":`<button class="btn-sm danger" onclick="deletePlan('${p.id}')">삭제</button>`}`
+      : "";
+    return `<tr>
+      <td class="left" style="font-weight:600">${esc(p.name)}${locked?' <span class="mini">🔒</span>':""}</td>
+      <td>${esc(orgName(p.org_id))}</td>
+      <td>${esc(userName(p.manager_id))}</td>
+      <td>${esc(p.category)}</td>
+      <td class="num">${ym(p.start_month).replace("-",".")}~${ym(p.end_month).replace("-",".")}</td>
+      ${cells}
+      <td class="num pct">${fmtPct(ann)}</td>
+      <td><span class="badge ${st}">${st}</span></td>
+      <td class="left" style="max-width:180px;font-size:12px;color:var(--sub)">${esc(p.remark||"")}</td>
+      <td style="white-space:nowrap">${manage}
+        <button class="btn-sm" onclick="openHistModal('${p.id}','${esc(p.name).replace(/'/g,"\\'")}')">이력</button></td>
+    </tr>`;
+  }).join("");
+}
+window.movePlan=async function(id, dir){
+  const p=S.plans.find(x=>x.id===id); if(!p) return;
+  const siblings=S.plans.filter(x=>x.org_id===p.org_id)
+    .sort((a,b)=>(a.sort_order-b.sort_order)||a.name.localeCompare(b.name));
+  const idx=siblings.findIndex(x=>x.id===id);
+  const swapIdx=idx+dir;
+  if(swapIdx<0||swapIdx>=siblings.length) return;
+  [siblings[idx],siblings[swapIdx]]=[siblings[swapIdx],siblings[idx]];
+  try{
+    for(let i=0;i<siblings.length;i++){
+      if(siblings[i].sort_order!==i){
+        const {error}=await sb.from("plans").update({sort_order:i}).eq("id",siblings[i].id);
+        if(error) throw error;
+      }
+    }
+  }catch(err){ return alert("순서 변경 실패: "+err.message); }
+  await loadPlans(); renderData();
+};
+
+/* ============================================================
+   사업계획 등록/수정 모달
+============================================================ */
+document.querySelectorAll("[data-close]").forEach(b=>
+  b.onclick=()=>$(b.dataset.close).classList.remove("show"));
+
+function buildPmOrgOptions(){
+  let html="";
+  S.orgs.filter(o=>o.type==="team"&&o.active).forEach(t=>{
+    const teamOk=canManage(t.id);
+    html+=`<option value="${t.id}" ${teamOk?"":"disabled"}>${esc(t.name)}</option>`;
+    S.orgs.filter(d=>d.parent_id===t.id&&d.active).forEach(d=>{
+      html+=`<option value="${d.id}" ${canManage(d.id)?"":"disabled"}>&nbsp;&nbsp;└ ${esc(d.name)}</option>`;
+    });
+  });
+  $("pmOrg").innerHTML=html;
+}
+
+let pmMonthlyData={};  // 편집 중 월별값 보존
+let pmLocked=false;     // 이 사업계획이 잠긴 연도 소속이라 계획값·기본정보 수정이 막혀있는지
+function updateAutoPreview(){
+  const s=$("pmStart").value, e=$("pmEnd").value, box=$("pmAutoPreview");
+  if(!s||!e||ymDiff(s,e)<0){ box.innerHTML=""; return; }
+  const st=computeAutoStatus(s,e,pmMonthlyData,S.refMonth);
+  box.innerHTML=`자동 계산 결과 (기준월 ${S.refMonth.replace("-",".")}): <span class="badge ${st}" style="font-size:11px;padding:1px 7px">${st}</span>`;
+}
+function rebuildMonthlyGrid(){
+  const s=$("pmStart").value, e=$("pmEnd").value, tbl=$("pmMonthly");
+  if(!s||!e||ymDiff(s,e)<0){ tbl.innerHTML='<tr><td style="padding:10px;color:var(--sub)">시작월·종료월을 선택하면 입력표가 생성됩니다.</td></tr>'; updateAutoPreview(); return; }
+  if(ymDiff(s,e)>47){ tbl.innerHTML='<tr><td style="padding:10px;color:var(--st-delay)">추진기간은 최대 48개월까지 입력할 수 있습니다.</td></tr>'; updateAutoPreview(); return; }
+  const months=ymList(s,e);
+  let h1='<tr><th style="width:60px"></th>', h2='<tr><th>계획</th>', h3='<tr><th>실적</th>';
+  months.forEach(m=>{
+    const v=pmMonthlyData[m]||{};
+    h1+=`<th>${m.replace("-",".")}</th>`;
+    h2+=`<td><input type="number" min="0" max="100" step="1" data-ym="${m}" data-k="p" value="${v.p??""}" ${pmLocked?"disabled":""}></td>`;
+    h3+=`<td><input type="number" min="0" max="100" step="1" data-ym="${m}" data-k="a" value="${v.a??""}"></td>`;
+  });
+  tbl.innerHTML=h1+"</tr>"+h2+"</tr>"+h3+"</tr>";
+  tbl.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",()=>{
+      const m=inp.dataset.ym,k=inp.dataset.k;
+      if(!pmMonthlyData[m]) pmMonthlyData[m]={};
+      pmMonthlyData[m][k]= inp.value==="" ? null : Math.max(0,Math.min(100,Number(inp.value)));
+      updateAutoPreview();
+    });
+  });
+  updateAutoPreview();
+}
+$("pmStart").addEventListener("change",rebuildMonthlyGrid);
+$("pmEnd").addEventListener("change",rebuildMonthlyGrid);
+
+function buildPmManagerOptions(currentManagerId){
+  let list=S.users.filter(u=>u.active && !u.hidden);
+  if(currentManagerId && !list.some(u=>u.id===currentManagerId)){
+    const cur=S.users.find(u=>u.id===currentManagerId);
+    if(cur) list=[...list, cur];   // 숨김/비활성 처리된 기존 담당자도 유지 표시
+  }
+  $("pmManager").innerHTML='<option value="">선택</option>'+
+    list.map(u=>`<option value="${u.id}">${esc(u.name)}${(u.hidden||!u.active)?" (비활성)":""} (${esc(orgName(u.org_id))})</option>`).join("");
+}
+
+window.openPlanModal=function(id){
+  S.editingId=id||null;
+  const p=id ? S.plans.find(x=>x.id===id) : null;
+  pmLocked = !!(p && S.me.role!=="admin" && isYearLocked(p.fiscal_year));
+  buildPmOrgOptions(); buildPmManagerOptions(p?.manager_id);
+  $("pmErr").className="auth-msg err"; $("pmErr").style.display="none";
+  $("pmTitle").textContent=p? "사업계획 수정" : "사업계획 등록";
+  $("pmName").value=p?.name||"";
+  if(p) $("pmOrg").value=p.org_id;
+  $("pmManager").value=p?.manager_id||"";
+  $("pmCategory").value=p?.category||"자체";
+  $("pmHold").checked = p?.status==="보류";
+  $("pmStart").value=p? ym(p.start_month) : `${S.year}-01`;
+  $("pmEnd").value=p? ym(p.end_month) : `${S.year}-12`;
+  $("pmRemark").value=p?.remark||"";
+  pmMonthlyData=p? JSON.parse(JSON.stringify(p.monthly||{})) : {};
+  rebuildMonthlyGrid();
+  $("pmLockNotice").style.display = pmLocked ? "" : "none";
+  ["pmName","pmOrg","pmManager","pmCategory","pmStart","pmEnd"].forEach(id=>{ $(id).disabled = pmLocked; });
+  // 조회만 가능한 사용자는 저장 버튼 숨김
+  $("pmSave").style.display=(p && !canManage(p.org_id)) ? "none" : "";
+  $("planModal").classList.add("show");
+};
+$("newPlanBtn").onclick=()=>openPlanModal(null);
+
+function pmError(t){ const m=$("pmErr"); m.textContent=t; m.style.display="block"; }
+
+$("pmSave").onclick=async()=>{
+  const name=$("pmName").value.trim();
+  const org_id=$("pmOrg").value, s=$("pmStart").value, e=$("pmEnd").value;
+  if(!name) return pmError("사업명을 입력해 주세요.");
+  if(!org_id) return pmError("담당 팀/과를 선택해 주세요.");
+  if(!s||!e) return pmError("시작월과 종료월을 선택해 주세요.");
+  if(ymDiff(s,e)<0) return pmError("종료월은 시작월 이후여야 합니다.");
+  if(!canManage(org_id)) return pmError("해당 조직의 사업계획을 관리할 권한이 없습니다.");
+  // 기간 밖 월 데이터 정리 + 값 검증
+  const valid=new Set(ymList(s,e)); const monthly={};
+  for(const [m,v] of Object.entries(pmMonthlyData)){
+    if(!valid.has(m)) continue;
+    const rec={};
+    for(const k of ["p","a"]){
+      if(v[k]===null||v[k]===undefined||v[k]==="") { rec[k]=null; continue; }
+      const n=Number(v[k]);
+      if(isNaN(n)||n<0||n>100) return pmError(`${m.replace("-",".")} ${k==="p"?"계획":"실적"} 값은 0~100 사이여야 합니다.`);
+      rec[k]=n;
+    }
+    if(rec.p!==null||rec.a!==null) monthly[m]=rec;
+  }
+  const status = $("pmHold").checked ? "보류" : computeAutoStatus(s,e,monthly,S.refMonth);
+  const row={
+    fiscal_year:Number(s.slice(0,4)), name, org_id,
+    manager_id:$("pmManager").value||null,
+    category:$("pmCategory").value, status,
+    start_month:s+"-01", end_month:e+"-01",
+    monthly, remark:$("pmRemark").value.trim()||null
+  };
+  $("pmSave").disabled=true;
+  try{
+    const q = S.editingId
+      ? sb.from("plans").update(row).eq("id",S.editingId)
+      : sb.from("plans").insert(row);
+    const {error}=await q;
+    if(error) throw error;
+    $("planModal").classList.remove("show");
+    await loadPlans(); renderData();
+  }catch(err){ pmError("저장 실패: "+err.message); }
+  finally{ $("pmSave").disabled=false; }
+};
+
+window.deletePlan=async function(id){
+  const p=S.plans.find(x=>x.id===id); if(!p) return;
+  if(!confirm(`'${p.name}' 사업계획을 삭제할까요?\n(삭제 이력이 기록되며, 이력에서 확인할 수 있습니다)`)) return;
+  const {error}=await sb.from("plans").update({deleted:true}).eq("id",id);
+  if(error) return alert("삭제 실패: "+error.message);
+  await loadPlans(); renderData();
+};
+
+/* ============================================================
+   변경이력
+============================================================ */
+function fmtChangeVal(field, v){
+  if(v===null||v===undefined) return "(없음)";
+  if(field==="org_id") return orgName(v);
+  if(field==="manager_id") return userName(v);
+  if(field==="start_month"||field==="end_month") return String(v).slice(0,7).replace("-",".");
+  if(field==="deleted") return v ? "삭제됨" : "정상";
+  if(field==="monthly") return "월별값 변경";
+  if(typeof v==="object") return JSON.stringify(v);
+  return String(v);
+}
+function historyItemHTML(h){
+  let chg="";
+  if(h.action==="등록"){
+    chg='<div class="hist-chg"><span class="mini">신규 등록</span></div>';
+  }else if(h.changes){
+    chg='<div class="hist-chg">'+Object.entries(h.changes).map(([k,v])=>{
+      const label=FIELD_LABEL[k]||k;
+      if(k==="monthly")
+        return `<div class="row"><span class="k">${label}</span> : 수정됨</div>`;
+      return `<div class="row"><span class="k">${esc(label)}</span> :
+        <span class="old">${esc(fmtChangeVal(k,v.old))}</span> →
+        <span class="new">${esc(fmtChangeVal(k,v.new))}</span></div>`;
+    }).join("")+"</div>";
+  }
+  const actColor=h.action==="삭제"?"var(--st-delay)":h.action==="등록"?"var(--st-done)":"var(--st-run)";
+  return `<div class="hist-item">
+    <div class="top">
+      <b style="color:${actColor}">[${h.action}]</b>
+      <b>${esc(h.plan_name||"")}</b>
+      <span>· ${esc(h.changed_by_name||"알 수 없음")}</span>
+      <span class="num" style="margin-left:auto">${fmtDT(h.changed_at)}</span>
+    </div>${chg}</div>`;
+}
+function renderHistory(){
+  const q=$("histSearch").value.trim().toLowerCase();
+  const list=S.history.filter(h=> !q ||
+    (h.plan_name||"").toLowerCase().includes(q) ||
+    (h.changed_by_name||"").toLowerCase().includes(q));
+  $("histBody").innerHTML = list.length
+    ? list.map(historyItemHTML).join("")
+    : '<div class="empty">이력이 없습니다.</div>';
+}
+$("histSearch").addEventListener("input",renderHistory);
+
+window.openHistModal=async function(planId, planName){
+  $("hmTitle").textContent=`변경이력 — ${planName}`;
+  $("hmBody").innerHTML='<div class="empty">불러오는 중...</div>';
+  $("histModal").classList.add("show");
+  const {data,error}=await sb.from("plan_history").select("*")
+    .eq("plan_id",planId).order("changed_at",{ascending:false});
+  $("hmBody").innerHTML = (error||!data?.length)
+    ? '<div class="empty">이력이 없습니다.</div>'
+    : data.map(historyItemHTML).join("");
+};
+
+/* ============================================================
+   엑셀 다운로드 (사업계획 + 월별진도 2개 시트)
+============================================================ */
+$("excelBtn").onclick=()=>{
+  const y=S.year, plans=filteredPlans();
+  if(!plans.length) return alert("다운로드할 사업계획이 없습니다.");
+  const head1=["사업명","담당팀/과","담당자","구분","시작월","종료월",
+    "1분기 계획","1분기 실적","2분기 계획","2분기 실적",
+    "3분기 계획","3분기 실적","4분기 계획","4분기 실적",
+    "연간 계획","연간 실적","추진상태","비고"];
+  const rows1=plans.map(p=>[
+    p.name, orgName(p.org_id), userName(p.manager_id), p.category,
+    ym(p.start_month), ym(p.end_month),
+    ...[1,2,3,4].flatMap(q=>[quarterVal(p,y,q,"p"),quarterVal(p,y,q,"a")]),
+    annualVal(p,y,"p"), annualVal(p,y,"a"), displayStatus(p), p.remark||""
+  ]);
+  const mHead=["사업명","담당팀/과","연월","계획(%)","실적(%)"];
+  const rows2=[];
+  plans.forEach(p=>{
+    Object.keys(p.monthly||{}).sort().forEach(m=>{
+      const v=p.monthly[m];
+      rows2.push([p.name, orgName(p.org_id), m, v.p??"", v.a??""]);
+    });
+  });
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet([[`${y}년 사업계획 현황 (기준일 ${new Date().toLocaleDateString("ko-KR")})`],head1,...rows1]);
+  ws1["!cols"]=[{wch:34},{wch:20},{wch:10},{wch:6},{wch:9},{wch:9},
+    ...Array(10).fill({wch:9}),{wch:8},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws1,"사업계획");
+  const ws2=XLSX.utils.aoa_to_sheet([mHead,...rows2]);
+  ws2["!cols"]=[{wch:34},{wch:20},{wch:9},{wch:8},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws2,"월별진도");
+  XLSX.writeFile(wb, `사업계획_${y}년_${new Date().toISOString().slice(0,10)}.xlsx`);
+};
+
+/* ============================================================
+   조직·사용자 관리 (시스템관리자)
+============================================================ */
+function renderAdmin(){
+  if(S.me.role!=="admin") return;
+  // 조직 (팀·과 순서변경 포함)
+  const ol=$("orgList");
+  const teams=S.orgs.filter(o=>o.type==="team").sort((a,b)=>(a.sort_order-b.sort_order)||a.name.localeCompare(b.name));
+  ol.innerHTML = teams.length ? teams.map(t=>{
+    const divs=S.orgs.filter(d=>d.parent_id===t.id).sort((a,b)=>(a.sort_order-b.sort_order)||a.name.localeCompare(b.name));
+    return `<div class="org-item ${t.active?"":"inactive"}">
+        <span class="nm">${esc(t.name)}</span><span class="tag">팀</span>
+        <button class="btn-sm" onclick="moveOrg('${t.id}',-1)" title="위로">▲</button>
+        <button class="btn-sm" onclick="moveOrg('${t.id}',1)" title="아래로">▼</button>
+        <button class="btn-sm" onclick="addDivisionTo('${t.id}','${esc(t.name).replace(/'/g,"\\'")}')">+ 과</button>
+        <button class="btn-sm" onclick="renameOrg('${t.id}')">이름변경</button>
+        <button class="btn-sm ${t.active?"danger":""}" onclick="toggleOrg('${t.id}',${!t.active})">${t.active?"비활성":"활성"}</button>
+      </div>`+
+      (divs.length ? divs.map(d=>`<div class="org-item div ${d.active?"":"inactive"}">
+        <span class="nm">${esc(d.name)}</span><span class="tag">과</span>
+        <button class="btn-sm" onclick="moveOrg('${d.id}',-1)" title="위로">▲</button>
+        <button class="btn-sm" onclick="moveOrg('${d.id}',1)" title="아래로">▼</button>
+        <button class="btn-sm" onclick="renameOrg('${d.id}')">이름변경</button>
+        <button class="btn-sm ${d.active?"danger":""}" onclick="toggleOrg('${d.id}',${!d.active})">${d.active?"비활성":"활성"}</button>
+      </div>`).join("") : `<div class="org-item div" style="color:#aab;font-style:italic">소속 과 없음</div>`);
+  }).join("") : '<div class="empty">등록된 조직이 없습니다. [+ 팀] 으로 시작하세요.</div>';
+
+  // 사용자 (숨김 처리 · 숨긴 사용자 포함 보기)
+  const orgOpts=(sel)=>'<option value="">미지정</option>'+
+    S.orgs.filter(o=>o.active).map(o=>
+      `<option value="${o.id}" ${o.id===sel?"selected":""}>${esc(o.type==="division"?"└ ":"")}${esc(o.name)}</option>`).join("");
+  const roleOpts=(sel)=>Object.entries(ROLE_LABEL).map(([k,v])=>
+    `<option value="${k}" ${k===sel?"selected":""}>${v}</option>`).join("");
+  const hiddenCount=S.users.filter(u=>u.hidden).length;
+  $("hiddenUserCount").textContent = hiddenCount ? `(숨김 ${hiddenCount}명)` : "";
+  const visibleUsers = S.showHiddenUsers ? S.users : S.users.filter(u=>!u.hidden);
+  $("userBody").innerHTML=visibleUsers.map(u=>`<tr${u.hidden?' style="opacity:.55"':""}>
+    <td style="font-weight:600">${esc(u.name)}${u.hidden?' <span class="tag pending">숨김</span>':""}</td>
+    <td class="left" style="font-size:12px">${esc(u.email||"")}</td>
+    <td><select onchange="setUser('${u.id}','org_id',this.value||null)">${orgOpts(u.org_id)}</select></td>
+    <td><select onchange="setUser('${u.id}','role',this.value)">${roleOpts(u.role)}</select></td>
+    <td>${u.active?'<span class="tag">활성</span>':'<span class="tag pending">'+(u.org_id?"비활성":"승인대기")+"</span>"}</td>
+    <td class="num" style="font-size:12px">${new Date(u.created_at).toLocaleDateString("ko-KR")}</td>
+    <td style="white-space:nowrap">
+      <button class="btn-sm ${u.active?"danger":""}" ${u.id===S.me.id?"disabled":""}
+        onclick="setUser('${u.id}','active',${!u.active})">${u.active?"비활성화":"승인·활성화"}</button>
+      <button class="btn-sm" ${u.id===S.me.id?"disabled":""}
+        onclick="setUser('${u.id}','hidden',${!u.hidden})">${u.hidden?"숨김 해제":"숨기기"}</button>
+    </td>
+  </tr>`).join("");
+}
+window.setUser=async function(id, field, value){
+  const {error}=await sb.from("profiles").update({[field]:value}).eq("id",id);
+  if(error) return alert("변경 실패: "+error.message);
+  await loadRefData(); renderAdmin(); buildFilterOptions();
+};
+window.renameOrg=async function(id){
+  const o=S.orgs.find(x=>x.id===id);
+  const name=prompt("새 이름을 입력하세요.", o?.name||"");
+  if(!name||!name.trim()) return;
+  const {error}=await sb.from("organizations").update({name:name.trim()}).eq("id",id);
+  if(error) return alert("변경 실패: "+error.message);
+  await loadRefData(); renderAdmin(); buildFilterOptions(); renderData();
+};
+window.toggleOrg=async function(id, active){
+  const {error}=await sb.from("organizations").update({active}).eq("id",id);
+  if(error) return alert("변경 실패: "+error.message);
+  await loadRefData(); renderAdmin(); buildFilterOptions();
+};
+window.moveOrg=async function(id, dir){
+  const o=S.orgs.find(x=>x.id===id); if(!o) return;
+  const siblings=S.orgs.filter(x=>x.type===o.type && x.parent_id===o.parent_id)
+    .sort((a,b)=>(a.sort_order-b.sort_order)||a.name.localeCompare(b.name));
+  const idx=siblings.findIndex(x=>x.id===id);
+  const swapIdx=idx+dir;
+  if(swapIdx<0||swapIdx>=siblings.length) return;
+  [siblings[idx],siblings[swapIdx]]=[siblings[swapIdx],siblings[idx]];
+  try{
+    for(let i=0;i<siblings.length;i++){
+      if(siblings[i].sort_order!==i){
+        const {error}=await sb.from("organizations").update({sort_order:i}).eq("id",siblings[i].id);
+        if(error) throw error;
+      }
+    }
+  }catch(err){ return alert("순서 변경 실패: "+err.message); }
+  await loadRefData(); renderAdmin(); buildFilterOptions(); renderData();
+};
+$("addTeamBtn").onclick=async()=>{
+  const name=prompt("팀 이름을 입력하세요."); if(!name||!name.trim()) return;
+  const {error}=await sb.from("organizations").insert({name:name.trim(), type:"team"});
+  if(error) return alert("등록 실패: "+error.message);
+  await loadRefData(); renderAdmin(); buildFilterOptions();
+};
+window.addDivisionTo=async function(teamId, teamName){
+  const name=prompt(`'${teamName}' 팀 소속으로 등록할 과 이름을 입력하세요.`);
+  if(!name||!name.trim()) return;
+  const {error}=await sb.from("organizations").insert({name:name.trim(), type:"division", parent_id:teamId});
+  if(error) return alert("등록 실패: "+error.message);
+  await loadRefData(); renderAdmin(); buildFilterOptions();
+};
+$("showHiddenChk").addEventListener("change",()=>{
+  S.showHiddenUsers=$("showHiddenChk").checked; renderAdmin();
+});
+
+/* ============================================================ */
+initAuthUI();
+</script>
+</body>
+</html>
